@@ -4,6 +4,7 @@ from numpy.linalg import inv
 from configurationFile import *
 
 def selectRandomFrmList(n, numList):
+    ## given a list this function selects n random items from it
     randIndx = np.random.randint(0, len(numList), (n))
     randPoints = numList[randIndx]
     return randPoints
