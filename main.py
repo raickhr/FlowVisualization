@@ -2,72 +2,47 @@ from matplotlib.animation import FuncAnimation, writers
 from netCDF4 import Dataset
 import numpy as np
 import matplotlib.pyplot as plt
-from fileLocations import *
 from functions import *
 from configurationFile import *
+from readData import *
 
+from mpi4py import MPI
+import sys
 
-gridDS = Dataset(fldLoc + '/' + gridFile)
-currentDS = Dataset(fldLoc + '/' + surfaceCurrentFile)
-stressDS = Dataset(fldLoc + '/' + windStressFile)
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+nprocs = comm.Get_size()
 
-KEandEKE = Dataset(fldLoc + '/' + KEandEKEfile)
+if rank == 0:
+    print("Running the code with {0:d} processors".format(nprocs))
 
-ugos = np.array(currentDS.variables[ugosVarname])
-vgos = np.array(currentDS.variables[vgosVarname])
+    print("Reading the grid data in processor 0")
+    grid = gridData()
 
-ugos = np.ma.array(ugos, mask=abs(ugos) > 10, fill_value=0.0).filled()
-vgos = np.ma.array(vgos, mask=abs(vgos) > 10, fill_value=0.0).filled()
+    print("Reading the velocity data in processor 0")
+    vel = velData(grid)
 
-taux = np.array(stressDS.variables[tauxVarname])
-tauy = np.array(stressDS.variables[tauyVarname])
+    print("Reading the stress data in processor 0")
+    stress = stressData(grid)
 
-ULAT = np.array(gridDS.variables[ulatVarname])
-ULONG = np.array(gridDS.variables[ulongVarname])
-KMT = np.array(gridDS.variables[kmtVarname])
+else:
+    grid = None
+    vel = None
+    stress = None
 
-EKE = np.array(KEandEKE.variables['avgKE'])
-
-GridXpoints = 180.0 / np.pi * ULONG[0, :]
-GridYpoints = 180.0 / np.pi * ULAT[:, 0]
-
-if cornerDefined:
-    x1_indx = min(range(len(GridXpoints)),
-                  key=lambda i: abs(GridXpoints[i]-x1))
-    x2_indx = min(range(len(GridXpoints)),
-                  key=lambda i: abs(GridXpoints[i]-x2))
-
-    y1_indx = min(range(len(GridYpoints)),
-                  key=lambda i: abs(GridYpoints[i]-y1))
-    y2_indx = min(range(len(GridYpoints)),
-                  key=lambda i: abs(GridYpoints[i]-y2))
-
-    ugos = ugos[:, y1_indx:y2_indx, x1_indx:x2_indx]
-    vgos = vgos[:, y1_indx:y2_indx, x1_indx:x2_indx]
-    taux = taux[:, y1_indx:y2_indx, x1_indx:x2_indx]
-    tauy = tauy[:, y1_indx:y2_indx, x1_indx:x2_indx]
-
-    ULAT = ULAT[y1_indx:y2_indx, x1_indx:x2_indx]
-    ULONG = ULONG[y1_indx:y2_indx, x1_indx:x2_indx]
-    KMT = KMT[y1_indx:y2_indx, x1_indx:x2_indx]
-
-    EKE = EKE[y1_indx:y2_indx, x1_indx:x2_indx]
-
-    GridXpoints = GridXpoints[x1_indx:x2_indx]
-    GridYpoints = GridYpoints[y1_indx:y2_indx]
+grid = comm.bcast(grid, root=0)
+vel = comm.bcast(vel, root=0)
+stress = comm.bcast(stress, root=0)
+if rank == 0:
+    print("grid, velocity and stress data shared across all processors")
 
 
 
-EKEmask = EKE > 0.07
 
-
-highEKEULAT = 180.0 / np.pi * ULAT[EKEmask]
-highEKEULONG = 180.0 / np.pi * ULONG[EKEmask]
-
-landMask = KMT < 1
-
-waterULAT = 180.0 / np.pi * ULAT[~landMask]
-waterULONG = 180.0 / np.pi * ULONG[~landMask]
+MPI.Finalize()
+sys.exit()
+##############################
+##############################
 
 xslots = np.ones((nhistories, nslots)) * float('nan')
 yslots = np.ones((nhistories, nslots)) * float('nan')
