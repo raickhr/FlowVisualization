@@ -65,6 +65,9 @@ class gridData:
     def get_waterMaskedLongLat2D(self):
         return self.__waterULONG, self.__waterULAT 
 
+    def get_gridXpointsYpoints(self):
+        return self.__GridXpoints, self.__GridYpoints
+
     def get_LongLat1D(self):
         return self.__GridXpoints, self.__GridYpoints
 
@@ -94,6 +97,9 @@ class velData:
 
     def get_UgosVgos_2D(self):
         return self.__ugos, self.__vgos
+
+    def get_timeLen(self):
+        return len(self.__ugos)
 
 
 class stressData:

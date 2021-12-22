@@ -1,10 +1,9 @@
-from matplotlib.animation import FuncAnimation, writers
 from netCDF4 import Dataset
 import numpy as np
-import matplotlib.pyplot as plt
 from functions import *
 from configurationFile import *
 from readData import *
+from writeParticleFile import *
 
 from mpi4py import MPI
 import sys
@@ -37,7 +36,111 @@ if rank == 0:
     print("grid, velocity and stress data shared across all processors")
 
 
+nlocalslots = nslots//(nprocs)
+nlocalPartBirth = nPartBirth//(nprocs)
 
+totSlots = nlocalslots * (nprocs)
+totPartBirth = nlocalPartBirth * (nprocs)
+
+waterULONG, waterULAT = grid.get_waterMaskedLongLat2D()
+GridXpoints, GridYpoints = grid.get_gridXpointsYpoints()
+ugos, vgos = vel.get_UgosVgos_2D()
+taux, tauy = stress.get_TauxTauy()
+timeLen = vel.get_timeLen()
+landMask = grid.get_landMask2D()
+
+xslots = np.ones((nhistories, nlocalslots), dtype =float) * float('nan')
+yslots = np.ones((nhistories, nlocalslots), dtype =float) * float('nan')
+
+uvelSlots = np.zeros((nhistories, nlocalslots), dtype=float)
+vvelSlots = np.zeros((nhistories, nlocalslots), dtype=float)
+
+### to keeep the record of the data in each processor
+
+totXslots = np.ones((timeLen, nhistories, nlocalslots), dtype =float) * float('nan')
+totYslots = np.ones((timeLen, nhistories, nlocalslots), dtype =float) * float('nan')
+totUvelSlots = np.zeros((timeLen, nhistories, nlocalslots), dtype=float)
+totVvelSlots = np.zeros((timeLen, nhistories, nlocalslots), dtype=float)
+totBackGround = np.shape(ugos)
+
+### get random points within the water region of the domain
+
+randXpoints = selectRandomFrmList(nlocalPartBirth, waterULONG)
+randYpoints = selectRandomFrmList(nlocalPartBirth, waterULAT)
+
+## the starting part of the particles are the random point created above
+
+xslots[0, 0:nlocalPartBirth] = randXpoints
+yslots[0, 0:nlocalPartBirth] = randYpoints
+
+## from the read velocity field the velocities at the above location is obtained
+
+uvelSlots[0, 0:nlocalPartBirth], vvelSlots[0, 0:nlocalPartBirth] = getVelAtPointsRegGrid(
+    randXpoints, randYpoints, ugos[0, :, :], vgos[0, :, :], GridXpoints, GridYpoints,
+    landMask)
+
+day = 0
+curr_dt = 0
+
+## Open the file to write the particle paths
+
+while day < timeLen:
+
+    uu = ugos[day, :, :]
+    vv = vgos[day, :, :]
+    background = taux[day , :, : ]
+
+    
+    xslots, yslots, uvelSlots, vvelSlots, pltBackground = \
+                          getFramDataInEachProc(xslots, yslots,
+                          uvelSlots, vvelSlots,
+                          nlocalPartBirth,
+                          uu, vv, background,
+                          GridXpoints, GridYpoints,
+                          landMask, waterULONG, waterULAT)
+
+    ## appending the array for the time series data
+
+    totXslots[day,:,:] = xslots
+    totYslots[day,:,:] = yslots
+    totUvelSlots[day, :, :] = uvelSlots
+    totVvelSlots[day,:,:] = vvelSlots
+
+
+## close the calcuation loop
+
+## Append data from all processors
+gatheredXslot = comm.gather(totXslots,root=0)
+gatheredYslot = comm.gather(totYslots, root=0)
+gatheredUvelSlot = comm.gather(totUvelSlots, root=0)
+gatheredVvelSlot = comm.gather(totVvelSlots, root=0)
+
+if rank == 0:
+    gatheredXslot = np.concatenate(gatheredXslot,axis=2)
+    gatheredYslot = np.concatenate(gatheredYslot,axis=2)
+    gatheredUvelSlot = np.concatenate(gatheredUvelSlot,axis=2)
+    gatheredVvelSlot = np.concatenate(gatheredVvelSlot,axis=2)
+
+    dimensonList = ['Time', 'history', 'PID']
+    dimLenList = [None, nhistories, totSlots]
+
+    varnames = ['Xpos', 'Ypos', 'uvel', 'vvel']
+    vardimensons = [('Time', 'history', 'PID'),
+                    ('Time', 'history', 'PID'),
+                    ('Time', 'history', 'PID'),
+                    ('Time', 'history', 'PID')]
+
+    varvalues = [gatheredXslot, gatheredYslot, gatheredVvelSlot, gatheredVvelSlot]
+
+    fullFileNameWithPath = outLoc +'/' +  outFile
+    
+    writeParticleFile(fullFileNameWithPath, dimensonList,
+                      dimLenList, varnames, vardimensons, varvalues)
+
+### write the particle file in netcdf format
+
+
+### Start the frame writing loop and write frame in parallel
 
 MPI.Finalize()
 sys.exit()
@@ -63,100 +166,5 @@ uvelSlots[0, 0:nPartBirth], vvelSlots[0, 0:nPartBirth] = getVelAtPointsRegGrid(
 
 
 
-fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(20, 12))
-if cornerDefined:
-    ax.set_xlim(x1, x2)
-    ax.set_ylim(y1, y2)
-    fig.set_size_inches((x2-x1)* 12/(y2-y1), 12)
-else:   
-    ax.set_xlim(0, 360)
-    ax.set_ylim(-90, 90)
-
-cmap = plt.cm.get_cmap('seismic')
-cmap.set_bad('k')
-pmesh = ax.pcolormesh(GridXpoints, GridYpoints, taux[0, :, :],
-                      cmap=cmap, vmin=-1, vmax=1)
-cb = plt.colorbar(pmesh)
 
 
-def getSize(uvel, vvel, mask):
-    velMag = np.sqrt(uvel**2, vvel**2)
-    velMag = np.ma.array(velMag, mask=mask, fill_value=0.0).filled()
-    velMag = np.ma.array(velMag, mask=velMag > 1.0, fill_value=1.0).filled()
-    #velMag /= 2
-
-    return (velMag)**2 * 0.4
-
-
-scatList = []
-for i in range(nhistories):
-    velmag = getSize(uvelSlots[i, :], vvelSlots[i, :], np.isnan(xslots[i, :]))
-    scat = ax.scatter(xslots[i, :], yslots[i, :], s=velmag,
-                      c='darkgreen', alpha=(1.0 - i/nhistories)**6)  # 1 - (100-abs(100-i)) * 0.01)  # c=mem_particle[0,:, :]
-    scatList.append(scat)
-
-
-def init():
-    pmesh.set_array(taux[0, :-1, :-1].flatten())
-    for i in range(nhistories):
-        arr = np.stack((xslots[i, :], yslots[i, :]), axis=0).transpose()
-        velmag = getSize(
-            uvelSlots[i, :], vvelSlots[i, :], np.isnan(xslots[i, :]))
-        scatList[i].set_offsets(arr)
-        scatList[i].set_sizes(velmag)
-    return scatList, pmesh
-
-
-def update(i):
-    print(i)
-    global xslots, yslots, uvelSlots, vvelSlots, ugos, vgos, GridXpoints, \
-        GridYpoints, landMask, nPartBirth, waterULAT, waterULONG, \
-        highEKEULONG, highEKEULAT
-
-    day = i // 10 + 1
-    uu = ugos[day, :, :]
-    vv = vgos[day, :, :]
-
-    pltTaux = np.ma.array(taux[day, :, :], mask=landMask,
-                          fill_value=float('nan')).filled()
-
-    # randXpoints = selectRandomFrmList(nPartBirth, highEKEULONG)
-    # randYpoints = selectRandomFrmList(nPartBirth, highEKEULAT)
-
-    randXpoints = selectRandomFrmList(nPartBirth, waterULONG)
-    randYpoints = selectRandomFrmList(nPartBirth, waterULAT)
-
-    # if i%3 == 0:
-    #     randXpoints = selectRandomFrmList(nPartBirth, waterULONG)
-    #     randYpoints = selectRandomFrmList(nPartBirth, waterULAT)
-
-    xslots, yslots, uvelSlots, vvelSlots = updateScatterArray(xslots, yslots,
-                                                              uvelSlots, vvelSlots, uu, vv,
-                                                              GridXpoints, GridYpoints,
-                                                              landMask, dt,
-                                                              randXpoints, randYpoints)
-
-    pmesh.set_array(pltTaux[:-1, :-1].flatten())
-
-    for i in range(nhistories):
-        arr = np.stack((xslots[i, :], yslots[i, :]), axis=0).transpose()
-        velmag = getSize(
-            uvelSlots[i, :], vvelSlots[i, :], np.isnan(xslots[i, :]))
-        scatList[i].set_offsets(arr)
-        scatList[i].set_sizes(velmag)
-    return scatList, pmesh
-    # fig.clear()
-    # ax.set_xlim(0, 360)
-    # ax.set_ylim(-90, 90)
-
-    # cb = fig.colorbar(pmesh)
-    # shootinStarVecplot(xslots, yslots)
-
-
-def getAnimation(Title):
-    animation = FuncAnimation(
-        fig, update, init_func=init, frames=900, interval=300)
-    animation.save(Title + '_test.gif', writer='imagemagick', fps=30)
-
-
-getAnimation('Kuroshio')

@@ -258,8 +258,35 @@ def updateScatterArray(xslots, yslots, uvelSlots, vvelSlots,
     return xslots, yslots, uvelSlots, vvelSlots
 
 
+def getVelMag(uvel, vvel, mask):
+    velMag = np.sqrt(uvel**2, vvel**2)
+    velMag = np.ma.array(velMag, mask=mask, fill_value=0.0).filled()
+    velMag = np.ma.array(velMag, mask=velMag > 1.0, fill_value=1.0).filled()
+    #velMag /= 2
+
+    return (velMag)**2 * 0.4
 
 
+def getFramDataInEachProc(xslots, yslots,
+                          uvelSlots, vvelSlots,
+                          nlocalPartBirth,
+                          uu, vv, background,
+                          GridXpoints, GridYpoints,
+                          landMask, waterULONG, waterULAT):
+
+    pltBackground = np.ma.array(background[:, :], mask=landMask,
+                                fill_value=float('nan')).filled()
+
+    randXpoints = selectRandomFrmList(nlocalPartBirth, waterULONG)
+    randYpoints = selectRandomFrmList(nlocalPartBirth, waterULAT)
+
+    xslots, yslots, uvelSlots, vvelSlots = updateScatterArray(xslots, yslots,
+                                                              uvelSlots, vvelSlots, uu, vv,
+                                                              GridXpoints, GridYpoints,
+                                                              landMask, dt,
+                                                              randXpoints, randYpoints)
+
+    return xslots, yslots, uvelSlots, vvelSlots, pltBackground
 
 
 

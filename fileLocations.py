@@ -4,3 +4,6 @@ KEandEKEfile = 'avgKEandEKE.nc'
 surfaceCurrentFile = '2000-01-01_to_2000-06-30_geosCurrent.nc'
 windStressFile = '2000-01-01_to_2000-06-30_stressFrmAbsWind_7day_ASC_DSC.nc'
 
+outLoc = '/scratch/srai6/temp'
+outFile = 'particleFile.nc'
+
