@@ -1,7 +1,7 @@
 from matplotlib.pyplot import fill
 import numpy as np
 from numpy.linalg import inv
-from configurationFile import *
+#from configurationFile import *
 
 def selectRandomFrmList(n, numList):
     ## given a list this function selects n random items from it
@@ -65,7 +65,7 @@ def interpolateReg(Q1, Q2, Q3, Q4, x, y, dx, dy, xArr, yArr):
     return(N1 * Q1 + N2 * Q2 + N3 * Q3 + N4 * Q4)
 
 
-def getVelAtPointsRegGrid(xpoints, ypoints, u2D, v2D, GridXpoints, GridYpoints, landMask):
+def getVelAtPointsRegGrid(xpoints, ypoints, u2D, v2D, GridXpoints, GridYpoints, landMask, cornerDefined):
     npoints = len(xpoints)
 
     if npoints != len(ypoints):
@@ -199,7 +199,8 @@ def moveParticlesReg(xpoints, ypoints, uvel, vvel, dt):
 
 def updateScatterArray(xslots, yslots, uvelSlots, vvelSlots, 
                        u2D, v2D, GridXpoints, GridYpoints, landMask, 
-                       dt, randXpoints, randYpoints):
+                       dt, randXpoints, randYpoints, nMaxParts, nslots,
+                       nPartBirth, nhistories, cornerDefined):
 
     historyAxis = 0
     particleAxis = 1 
@@ -214,7 +215,7 @@ def updateScatterArray(xslots, yslots, uvelSlots, vvelSlots,
     ## find the new postions and velocities at new postion
     newXpoints, newYpoints = moveParticlesReg(xpoints, ypoints, uvel, vvel, dt)
     newUvel, newVvel = getVelAtPointsRegGrid(
-        newXpoints, newYpoints, u2D, v2D, GridXpoints, GridYpoints, landMask)
+        newXpoints, newYpoints, u2D, v2D, GridXpoints, GridYpoints, landMask, cornerDefined)
 
     ## update the array to push the new positions and velocities
     xslots = np.roll(xslots, 1, axis=historyAxis)
@@ -247,7 +248,7 @@ def updateScatterArray(xslots, yslots, uvelSlots, vvelSlots,
     yslots[0, 0:nPartBirth] = randYpoints
 
     uvelSlots[0, 0:nPartBirth], vvelSlots[0, 0:nPartBirth] = getVelAtPointsRegGrid(
-        randXpoints, randYpoints, u2D, v2D, GridXpoints, GridYpoints, landMask)
+        randXpoints, randYpoints, u2D, v2D, GridXpoints, GridYpoints, landMask, cornerDefined)
 
     xslots[1:nhistories, 0:nPartBirth] = float('nan')
     yslots[1:nhistories, 0:nPartBirth] = float('nan')
@@ -272,7 +273,9 @@ def getFramDataInEachProc(xslots, yslots,
                           nlocalPartBirth,
                           uu, vv, background,
                           GridXpoints, GridYpoints,
-                          landMask, waterULONG, waterULAT):
+                          landMask, waterULONG, waterULAT,
+                          dt, nMaxParts, nslots, nPartBirth, nhistories, 
+                          cornerDefined):
 
     pltBackground = np.ma.array(background[:, :], mask=landMask,
                                 fill_value=float('nan')).filled()
@@ -284,7 +287,8 @@ def getFramDataInEachProc(xslots, yslots,
                                                               uvelSlots, vvelSlots, uu, vv,
                                                               GridXpoints, GridYpoints,
                                                               landMask, dt,
-                                                              randXpoints, randYpoints)
+                                                              randXpoints, randYpoints, 
+                                                              nMaxParts, nslots, nPartBirth, nhistories, cornerDefined)
 
     return xslots, yslots, uvelSlots, vvelSlots, pltBackground
 

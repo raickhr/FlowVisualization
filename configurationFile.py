@@ -1,5 +1,5 @@
 import numpy as np
-nPartBirth = 150
+nPartBirth = 20
 nhistories = 200
 nMaxParts = nPartBirth * nhistories
 

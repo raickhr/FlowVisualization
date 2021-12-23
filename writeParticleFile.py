@@ -23,8 +23,8 @@ def writeParticleFile(fullFileNameWithPath,dimensonList,dimLenList, varnames, va
         varValue = varvalues[varNum]
         varDimension = vardimensions[varNum]
 
-        var = ds.createVariable[varName, float, varDimension]
-        var[:] = varValue[:]
+        var = ds.createVariable(varName, float, varDimension)
+        var = varValue
 
 
     ds.close()
