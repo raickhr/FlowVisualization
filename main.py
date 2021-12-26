@@ -71,7 +71,7 @@ totVvelSlots = np.zeros((timeLen, nhistories, nlocalslots), dtype=float)
 totBackGround = np.zeros(ugosShape, dtype =float)
 
 
-### get random points within the water region of the domain
+### get random points within the water region of the domain each processors
 
 randXpoints = selectRandomFrmList(nlocalPartBirth, waterULONG)
 randYpoints = selectRandomFrmList(nlocalPartBirth, waterULAT)
@@ -155,7 +155,9 @@ while day < 2 :#timeLen:
 
 ## Append data from all processors
 
-if rank == 0:
+## every processor is calculating and storing in variables totXslots, totYslots, totUvelSlots, totVvelSlots
+
+if rank == 0: ## rank is processor id
 
     allXposData = [totXslots]
     for i in range(1,nprocs):
